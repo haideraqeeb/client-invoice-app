@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tax Invoice - {{INVOICE_NUMBER}}</title>
+  <style>
+    /* Reset and Base Styles */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #222;
+      margin: 24px;
+      background: #fff;
+    }
+
+    .invoice-container {
+      width: 800px;
+      margin: 0 auto;
+      border: 1px solid #ccc;
+      padding: 24px;
+      background-color: #fff;
+    }
+
+    h1, h2, h3, h4, h5 {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    /* === Header Section === */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #3b0764;
+      padding-bottom: 16px;
+    }
+
+    .company-section {
+      width: 55%;
+    }
+
+    .company-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: #3b0764;
+      margin-bottom: 4px;
+    }
+
+    .company-details {
+      font-size: 12px;
+      color: #555;
+      line-height: 1.4;
+    }
+
+    .invoice-meta {
+      text-align: right;
+      width: 40%;
+    }
+
+    .invoice-meta h2 {
+      color: #3b0764;
+      margin-bottom: 6px;
+    }
+
+    .invoice-meta .meta-line {
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    /* === Party Details === */
+    .party-details {
+      margin-top: 20px;
+      background-color: #f8f8fc;
+      border: 1px solid #ddd;
+      padding: 12px 16px;
+      border-radius: 4px;
+    }
+
+    .party-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #3b0764;
+      margin-bottom: 4px;
+    }
+
+    .party-info {
+      font-size: 12px;
+      color: #333;
+    }
+
+    .party-info div {
+      margin-bottom: 2px;
+    }
+
+    /* === Items Table === */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    table th, table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #ccc;
+    }
+
+    table th {
+      background-color: #3b0764;
+      color: white;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    table td.amount {
+      text-align: right;
+    }
+
+    /* === Totals Section === */
+    .totals {
+      margin-top: 12px;
+      width: 100%;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .totals-table {
+      border: 1px solid #ccc;
+      border-collapse: collapse;
+      width: 300px;
+      font-size: 12.5px;
+    }
+
+    .totals-table th, .totals-table td {
+      padding: 8px;
+      text-align: right;
+      border-bottom: 1px solid #ccc;
+    }
+
+    .totals-table th {
+      background-color: #878686;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .totals-table tr:last-child td {
+      background-color: #7d7d7d;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    /* === Amount in Words === */
+    .amount-words {
+      margin-top: 18px;
+      background-color: #f6f6fa;
+      border: 1px dashed #ccc;
+      padding: 10px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .amount-words strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #3b0764;
+    }
+
+    /* === Footer Section === */
+    .footer {
+      margin-top: 28px;
+      display: flex;
+      justify-content: space-between;
+      border-top: 2px solid #3b0764;
+      padding-top: 12px;
+      font-size: 12px;
+    }
+
+    .footer-column {
+      width: 45%;
+    }
+
+    .footer-column strong {
+      color: #3b0764;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .footer-note {
+      text-align: right;
+      font-size: 11px;
+      color: #777;
+      margin-top: 30px;
+      font-style: italic;
+    }
+
+    /* === Utility === */
+    .text-right { text-align: right; }
+    .text-left { text-align: left; }
+    .text-center { text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="invoice-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="company-section">
+        <div class="company-name">{{COMPANY_NAME}}</div>
+        <div class="company-details">
+          <div>{{COMPANY_ADDRESS_HTML}}</div>
+          <div><strong>UDYAM:</strong> {{COMPANY_UDYAM}}</div>
+          <div><strong>GST:</strong> {{COMPANY_GST}}</div>
+          <div><strong>Contact:</strong> {{COMPANY_CONTACT}}</div>
+        </div>
+      </div>
+      <div class="invoice-meta">
+        <h2>TAX INVOICE</h2>
+        <div class="meta-line"><strong>Invoice No:</strong> {{INVOICE_NUMBER}}</div>
+        <div class="meta-line"><strong>Dated:</strong> {{DATE}}</div>
+      </div>
+    </div>
+
+    <!-- Party Info -->
+    <div class="party-details">
+      <div class="party-title">Bill To:</div>
+      <div class="party-info">
+        <div><strong>{{PARTY_NAME}}</strong></div>
+        <div>{{PARTY_ADDRESS_HTML}}</div>
+        <div><strong>PAN:</strong> {{PARTY_PAN}}</div>
+        <div><strong>GST:</strong> {{PARTY_GST}}</div>
+      </div>
+    </div>
+
+    <!-- Items Table -->
+    <table class="items">
+      <thead>
+        <tr>
+          <th style="width: 70%;">Particulars</th>
+          <th style="width: 30%;" class="amount">Amount (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ITEM_ROWS}}
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="totals">
+      <table class="totals-table">
+        <tr>
+          <th>Total</th>
+          <td>₹ {{TOTAL_BASE_DISPLAY}}</td>
+        </tr>
+        <tr>
+          <th>GST @ 18%</th>
+          <td>₹ {{GST_DISPLAY}}</td>
+        </tr>
+        <tr>
+          <th>Amount Payable</th>
+          <td>₹ {{TOTAL_DISPLAY}}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Amount in Words -->
+    <div class="amount-words">
+      <strong>Amount Chargeable (in words):</strong>
+      <div>{{AMOUNT_WORDS}}</div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-column">
+        <strong>Company PAN:</strong>
+        <div>{{COMPANY_PAN}}</div>
+      </div>
+      <div class="footer-column text-right">
+        <strong>Bank Details:</strong>
+        <div>{{COMPANY_BANK_HTML}}</div>
+      </div>
+    </div>
+
+    <!-- Note -->
+    <div class="footer-note">
+      This is a computer generated invoice.
+    </div>
+  </div>
+</body>
+</html>
