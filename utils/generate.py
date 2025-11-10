@@ -5,7 +5,7 @@ def generate_template_html(company_data, color, has_gst, has_msme, has_qr):
     
     # Read template from file
     try:
-        with open('file.html', 'r', encoding='utf-8') as f:
+        with open('template.html', 'r', encoding='utf-8') as f:
             template = f.read()
     except FileNotFoundError:
         return None
