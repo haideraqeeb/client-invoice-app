@@ -29,6 +29,31 @@
       margin-bottom: 8px;
     }
 
+    /* === International Notice === */
+    .international-notice {
+      background-color: #fff3cd;
+      border: 2px solid #ffc107;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+
+    .international-notice .notice-text {
+      font-size: 11px;
+      font-weight: 600;
+      color: #856404;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .international-notice .lut-details {
+      font-size: 11px;
+      color: #856404;
+      display: flex;
+      justify-content: space-around;
+      margin-top: 6px;
+    }
+
     /* === Header Section === */
     .header {
       display: flex;
@@ -70,13 +95,22 @@
       margin-bottom: 4px;
     }
 
-    /* === Party Details === */
-    .party-details {
+    /* === Party Details with QR === */
+    .party-qr-wrapper {
       margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .party-details {
       background-color: #f8f8fc;
       border: 1px solid #ddd;
       padding: 12px 16px;
       border-radius: 4px;
+      flex: 1;
+      max-width: 65%;
     }
 
     .party-title {
@@ -95,6 +129,30 @@
       margin-bottom: 2px;
     }
 
+    .qr-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: #fff;
+    }
+
+    .qr-section img {
+      max-width: 150px;
+      max-height: 150px;
+      display: block;
+    }
+
+    .qr-section .qr-label {
+      font-size: 10px;
+      color: #666;
+      margin-top: 4px;
+      text-align: center;
+    }
+
     /* === Items Table === */
     table {
       width: 100%;
@@ -103,7 +161,7 @@
     }
 
     table th, table td {
-      padding: 10px 8px;
+      padding: 8px 8px;
       border-bottom: 1px solid #ccc;
     }
 
@@ -116,6 +174,10 @@
 
     table td.amount {
       text-align: right;
+    }
+
+    table td.hsn {
+      text-align: center;
     }
 
     /* === Totals Section === */
@@ -203,12 +265,22 @@
 </head>
 <body>
   <div class="invoice-container">
+    <!-- International Notice (Conditional) -->
+    <? if (INTERNATIONAL_PARTY) { ?>
+    <div class="international-notice">
+      <div class="notice-text">
+        SUPPLY MEANT FOR EXPORT/SUPPLY TO SEZ UNIT OR SEZ DEVELOPER FOR AUTHORISED OPERATIONS UNDER BOND OR LETTER OF UNDERTAKING WITHOUT PAYMENT OF IGST
+      </div>
+    </div>
+    <? } ?>
+
     <!-- Header -->
     <div class="header">
       <div class="company-section">
         <div class="company-name">{{COMPANY_NAME}}</div>
         <div class="company-details">
           <div>{{COMPANY_ADDRESS_HTML}}</div>
+          <div><strong>State:</strong> {{COMPANY_STATE}} &nbsp;&nbsp;&nbsp; <strong>State Code:</strong> {{COMPANY_STATE_CODE}}</div>
           <div><strong>UDYAM:</strong> {{COMPANY_UDYAM}}</div>
           <div><strong>GST:</strong> {{COMPANY_GST}}</div>
           <div><strong>Contact:</strong> {{COMPANY_CONTACT}}</div>
@@ -218,17 +290,28 @@
         <h2>TAX INVOICE</h2>
         <div class="meta-line"><strong>Invoice No:</strong> {{INVOICE_NUMBER}}</div>
         <div class="meta-line"><strong>Dated:</strong> {{DATE}}</div>
+        <div class="meta-line"><strong>Due Date:</strong> {{DUE_DATE}}</div>
       </div>
     </div>
 
-    <!-- Party Info -->
-    <div class="party-details">
-      <div class="party-title">Bill To:</div>
-      <div class="party-info">
-        <div><strong>{{PARTY_NAME}}</strong></div>
-        <div>{{PARTY_ADDRESS_HTML}}</div>
-        <div><strong>PAN:</strong> {{PARTY_PAN}}</div>
-        <div><strong>GST:</strong> {{PARTY_GST}}</div>
+    <!-- Party Info with QR Code -->
+    <div class="party-qr-wrapper">
+      <div class="party-details">
+        <div class="party-title">Bill To:</div>
+        <div class="party-info">
+          <div><strong>{{PARTY_NAME}}</strong></div>
+          <div>{{PARTY_ADDRESS_HTML}}&nbsp;&nbsp;&nbsp; <strong>State Code:</strong> {{PARTY_STATE_CODE}}</div>
+          <? if (!INTERNATIONAL_PARTY) { ?>
+              <div><strong>PAN:</strong> {{PARTY_PAN}}</div>
+              <div><strong>GST:</strong> {{PARTY_GST}}</div>
+          <? } ?>
+          <div><strong>Place of Supply:</strong> {{PARTY_STATE}}</div>
+        </div>
+      </div>
+      
+      <div class="qr-section">
+        <img src="{{COMPANY_QR}}" alt="Payment QR Code" />
+        <div class="qr-label">Scan to Pay</div>
       </div>
     </div>
 
@@ -236,8 +319,14 @@
     <table class="items">
       <thead>
         <tr>
+          <? if (HAS_HSN) { ?>
+          <th style="width: 55%;">Particulars</th>
+          <th style="width: 15%;" class="hsn">HSN/SAC</th>
+          <th style="width: 30%;" class="amount">Amount</th>
+          <? } else { ?>
           <th style="width: 70%;">Particulars</th>
-          <th style="width: 30%;" class="amount">Amount (₹)</th>
+          <th style="width: 30%;" class="amount">Amount</th>
+          <? } ?>
         </tr>
       </thead>
       <tbody>
@@ -250,15 +339,15 @@
       <table class="totals-table">
         <tr>
           <th>Total</th>
-          <td>₹ {{TOTAL_BASE_DISPLAY}}</td>
+          <td>{{TOTAL_BASE_DISPLAY}}</td>
         </tr>
         <tr>
-          <th>GST @ 18%</th>
-          <td>₹ {{GST_DISPLAY}}</td>
+          <th>Total GST</th>
+          <td>{{GST_DISPLAY}}</td>
         </tr>
         <tr>
           <th>Amount Payable</th>
-          <td>₹ {{TOTAL_DISPLAY}}</td>
+          <td>{{TOTAL_DISPLAY}}</td>
         </tr>
       </table>
     </div>
@@ -278,6 +367,12 @@
       <div class="footer-column text-right">
         <strong>Bank Details:</strong>
         <div>{{COMPANY_BANK_HTML}}</div>
+        <? if (INTERNATIONAL_PARTY) { ?>
+        <div style="margin-top: 8px;">
+          <div><strong>LUT No:</strong> {{LUT_NUMBER}}</div>
+          <div><strong>LUT Validity:</strong> {{LUT_VALIDITY_FROM}} to {{LUT_VALIDITY_TO}}</div>
+        </div>
+        <? } ?>
       </div>
     </div>
 
