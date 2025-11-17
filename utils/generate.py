@@ -22,6 +22,9 @@ def generate_template_html(company_data, color, has_gst, has_msme, has_qr):
     template = template.replace('{{COMPANY_PAN}}', company_data['pan'])
     template = template.replace('{{COMPANY_BANK_HTML}}', company_data['bank_html'])
     
+    # Replace invoice number with the calculated value
+    template = template.replace('{{INVOICE_NUMBER}}', company_data['invoice_number'])
+    
     # Replace LUT details with company data
     template = template.replace('{{LUT_NUMBER}}', company_data.get('lut_number', ''))
     template = template.replace('{{LUT_VALIDITY_FROM}}', company_data.get('lut_validity_from', ''))
