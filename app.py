@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 from datetime import datetime
 from utils.address import convert_address_to_three_lines
@@ -51,6 +52,10 @@ if 'template_file_id' not in st.session_state:
     st.session_state.template_file_id = ''
 if 'dest_folder_id' not in st.session_state:
     st.session_state.dest_folder_id = ''
+if 'first_time_invoice' not in st.session_state:
+    st.session_state.first_time_invoice = True
+if 'invoices_generated' not in st.session_state:
+    st.session_state.invoices_generated = 0
 
 # Read state codes
 state_codes = read_state_codes()
@@ -74,39 +79,54 @@ if st.session_state.show_instructions:
     1. Go to [Google Drive](https://drive.google.com)
     2. Upload the template HTML file you just downloaded
     3. Right-click the uploaded file and select **Get link**
-    4. Copy the File ID from the link
-    
-    **Example:** If your link is `https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/view`  
-    The File ID is: `1AbCdEfGhIjKlMnOpQrStUvWxYz`
+    4. Paste the full link below.
     """)
-    
-    template_file_id = st.text_input(
-        "Paste Template File ID here:", 
+
+    template_link = st.text_input(
+        "Paste Template File Link here:",
         value=st.session_state.template_file_id,
-        placeholder="1AbCdEfGhIjKlMnOpQrStUvWxYz"
+        placeholder="https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/view"
     )
-    if template_file_id:
-        st.session_state.template_file_id = template_file_id
-    
+
+    if template_link:
+        # Remove query parameters and fragments
+        clean_link = re.split(r'[?#]', template_link)[0]
+        # Match only valid Google Drive ID characters
+        match = re.search(r'/d/([a-zA-Z0-9_-]+)', clean_link)
+        if not match:
+            match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', template_link)
+        
+        if match:
+            st.session_state.template_file_id = match.group(1)
+
+
     st.markdown("---")
-    
+
     st.markdown("### Step 2: Create Invoice Folder")
     st.checkbox("Create a folder in Google Drive to store generated invoices", key="check2")
     st.markdown("""
     1. In Google Drive, create a new folder (e.g., name it "Invoices")
-    2. Open the folder and copy the Folder ID from the URL
-    
-    **Example:** If your folder URL is `https://drive.google.com/drive/folders/1XyZaBcDeFgHiJkLmNoPqRsTuVw`  
-    The Folder ID is: `1XyZaBcDeFgHiJkLmNoPqRsTuVw`
+    2. Open the folder and copy the link from the URL bar  
+    3. Paste the full link below.
     """)
-    
-    dest_folder_id = st.text_input(
-        "Paste Destination Folder ID here:", 
+
+    dest_folder_link = st.text_input(
+        "Paste Destination Folder Link here:",
         value=st.session_state.dest_folder_id,
-        placeholder="1XyZaBcDeFgHiJkLmNoPqRsTuVw"
+        placeholder="https://drive.google.com/drive/folders/1XyZaBcDeFgHiJkLmNoPqRsTuVw"
     )
-    if dest_folder_id:
-        st.session_state.dest_folder_id = dest_folder_id
+
+    if dest_folder_link:
+        # Remove query parameters and fragments
+        clean_link = re.split(r'[?#]', dest_folder_link)[0]
+        # Match only valid Google Drive ID characters
+        match = re.search(r'/folders/([a-zA-Z0-9_-]+)', clean_link)
+        if not match:
+            match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', dest_folder_link)
+        
+        if match:
+            st.session_state.dest_folder_id = match.group(1)
+
     
     st.markdown("---")
     
@@ -117,8 +137,8 @@ if st.session_state.show_instructions:
         columns_list = """
         - Client Name
         - Cost to Client
-        - Description
         - HSN/SAC (Keep empty for international clients)
+        - Description
         - Client Address
         - Client PAN (Keep empty for international clients)
         - Client GSTIN (Keep empty for international clients)
@@ -151,10 +171,10 @@ if st.session_state.show_instructions:
     
     **Important:** Column names must match exactly, including capitalization and spacing.
     
-    **Note about "Same State" column:**
-    - Enter "yes" if customer's state matches your company state (CGST + SGST will be charged)
-    - Enter "no" if customer's state is different from your company state (IGST will be charged)
-    - Enter "outside" if customer is international (No GST, LUT details will be included)
+    **Note about "Client State" column:**
+    - For domestic clients: Enter the state name (e.g., "Maharashtra", "Delhi")
+    - For international clients: Enter "Outside India(USD)" or "Outside India(Euro)" etc.
+    - The script will automatically handle GST calculation based on state matching
     """)
     
     st.markdown("---")
@@ -245,7 +265,7 @@ if st.session_state.show_instructions:
     1. In the Apps Script editor, click on the **Triggers** icon (⏰) in the left sidebar
     2. Click **+ Add Trigger** (bottom right)
     3. Configure the trigger as follows:
-       - Choose which function to run: **onSheetEdit**
+       - Choose which function to run: **handleEdit**
        - Choose which deployment should run: **Head**
        - Select event source: **From spreadsheet**
        - Select event type: **On edit**
@@ -261,7 +281,9 @@ if st.session_state.show_instructions:
     st.markdown("""
     1. Go back to your Google Sheet
     2. Fill in the first data row (row 2) with sample client information
-    3. In the **Same State** column, enter "yes", "no", or "outside" based on client location
+    3. For **Client State**: 
+       - Domestic: Enter state name like "Maharashtra"
+       - International: Enter "Outside India(USD)" or "Outside India(Euro)"
     4. In the **Generate(Yes/No)** column, type `yes`
     5. Press Enter
     6. Wait a few seconds
@@ -278,7 +300,7 @@ if st.session_state.show_instructions:
     st.markdown("""
     ### Troubleshooting Tips
     
-    - **Script not running:** Make sure the trigger is created correctly and the function name is `onSheetEdit`
+    - **Script not running:** Make sure the trigger is created correctly and the function name is `onEdit`
     - **Permission errors:** Re-run Step 5 to grant permissions again
     - **Invoice not generated:** Check that all required columns are filled and column names match exactly
     - **PDF not appearing:** Verify the Folder ID is correct and you have write access to that folder
@@ -316,6 +338,33 @@ else:
         
         company_contact = st.text_input("Contact Number", placeholder="e.g., +91-9876543210")
         company_pan = st.text_input("Company PAN", placeholder="e.g., ABCDE1234F")
+        
+        st.markdown("---")
+        st.markdown("**Invoice Numbering**")
+        
+        first_time = st.radio(
+            "Is this the first time generating invoices?",
+            options=["Yes", "No"],
+            horizontal=True,
+            help="Select 'No' if you have already generated invoices and want to continue the series"
+        )
+        
+        st.session_state.first_time_invoice = (first_time == "Yes")
+        
+        if not st.session_state.first_time_invoice:
+            invoices_count = st.number_input(
+                "How many invoices have been generated so far?",
+                min_value=1,
+                max_value=999,
+                value=1,
+                step=1,
+                help="Enter the number of invoices already generated (e.g., 34). The next invoice will be numbered accordingly."
+            )
+            st.session_state.invoices_generated = invoices_count
+            st.info(f"Template will show invoice number as: **{datetime.now().year}/Inv/{str(invoices_count).zfill(3)}**. Next invoice will start from **{str(invoices_count + 1).zfill(3)}**")
+        else:
+            st.session_state.invoices_generated = 0
+            st.info(f"Template will show invoice number as: **{datetime.now().year}/Inv/000**. First invoice will be numbered **001**")
         
         st.markdown("---")
         st.markdown("**Client Settings**")
@@ -458,6 +507,10 @@ else:
             company_address_3line = convert_address_to_three_lines(company_address)
             bank_details_html = format_bank_details(bank_ac_holder, bank_name, bank_ac_no, bank_ifsc)
             
+            # Calculate invoice number for template
+            current_year = datetime.now().year
+            invoice_number_display = f"{current_year}/Inv/{str(st.session_state.invoices_generated).zfill(3)}"
+            
             company_data = {
                 'name': company_name.strip(),
                 'address_html': company_address_3line,
@@ -471,14 +524,15 @@ else:
                 'qr_code': qr_code_base64 if has_qr else None,
                 'lut_number': lut_number.strip() if has_international else '',
                 'lut_validity_from': lut_validity_from.strftime('%d-%b-%Y') if has_international and lut_validity_from else '',
-                'lut_validity_to': lut_validity_to.strftime('%d-%b-%Y') if has_international and lut_validity_to else ''
+                'lut_validity_to': lut_validity_to.strftime('%d-%b-%Y') if has_international and lut_validity_to else '',
+                'invoice_number': invoice_number_display
             }
             
             template = generate_template_html(company_data, invoice_color, has_gst, has_msme, has_qr)
             
             if template:
                 st.session_state.template_html = template
-                st.session_state.has_international = has_international  # Store for preview logic
+                st.session_state.has_international = has_international
                 st.success("Template generated successfully! Preview available on the right. Download and proceed to setup instructions.")
 
     with col2:
@@ -598,14 +652,15 @@ else:
             ### How it works:
             1. Fill in all your company details in the form
             2. Select your company's state from the dropdown
-            3. Toggle UDYAM/MSME registration if applicable
-            4. Toggle GST setting based on your client's registration status
-            5. Optionally upload a payment QR code
-            6. Choose your brand color using the color picker
-            7. Click 'Generate Template' to create your customized template
-            8. Preview will show different invoice types in tabs
-            9. Download the template HTML file
-            10. Follow the setup instructions to integrate with Google Sheets
+            3. Choose if this is your first time generating invoices or continue from existing count
+            4. Toggle UDYAM/MSME registration if applicable
+            5. Toggle GST setting based on your client's registration status
+            6. Optionally upload a payment QR code
+            7. Choose your brand color using the color picker
+            8. Click 'Generate Template' to create your customized template
+            9. Preview will show different invoice types in tabs
+            10. Download the template HTML file
+            11. Follow the setup instructions to integrate with Google Sheets
             """)
     
     st.markdown("---")

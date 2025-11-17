@@ -68,7 +68,7 @@ const STATE_CODES = {
 };
 
 // ========== Auto-populate client details ==========
-function onEdit(e) {
+function handleEdit(e) {
   const sheet = e.range.getSheet();
   const editedRow = e.range.getRow();
   const editedColumn = e.range.getColumn();
@@ -206,17 +206,14 @@ function parseMultipleItems(descriptionStr, costStr, hsnStr) {
   // Parse descriptions with narrations
   const items = [];
   
-  // --- THIS IS THE FIX ---
-  // Use the new smart-splitter instead of the simple .split()
+  // Use the smart-splitter instead of the simple .split()
   const descParts = splitByTopLevelPipe(descriptionStr);
-  // --- END OF FIX ---
   
   for (let i = 0; i < descParts.length; i++) {
     const part = descParts[i].trim();
     if (!part) continue;
     
     // Check if this part has narrations in parentheses
-    // This regex looks for: "Item Name (Narration Content)"
     const narrationMatch = part.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
     
     let itemName = '';
@@ -282,18 +279,121 @@ function isGSTTemplate(templateHtml) {
 
 // ========== Parse International Client Format ==========
 function parseInternationalClient(clientStateStr) {
-  // Format: "foreign($, US Dollars)" or "foreign(€, Euros)"
-  const match = clientStateStr.match(/foreign\s*\(\s*([^\s,]+)\s*,\s*([^)]+)\)/i);
-  if (match) {
+  // Expected formats:
+  // "Outside India(US Dollars)"
+  // "Outside India(€, Euros)"
+  // "Outside India(Euro)"
+  // "Outside India(Dollr)"
+
+  const match = clientStateStr.match(/outside india\s*\(\s*([^)]+)\)/i);
+  if (!match) return null;
+
+  const rawCurrency = match[1].trim();
+
+  const result = fuzzyCurrency(rawCurrency);
+  if (!result.ok) {
     return {
       isInternational: true,
-      currencySymbol: match[1].trim(),
-      currencyName: match[2].trim(),
-      partyState: 'Other Territory',
-      stateCode: '97'
+      currencySymbol: null,
+      currencyName: rawCurrency,
+      error: "Unknown currency",
+      partyState: "Outside India",
+      stateCode: "96"
     };
   }
-  return null;
+
+  return {
+    isInternational: true,
+    currencySymbol: result.symbol,
+    currencyName: result.name,
+    currencyCode: result.code,
+    confidence: result.confidence,
+    partyState: "Outside India",
+    stateCode: "96"
+  };
+}
+
+function fuzzyCurrency(query) {
+const currencies = [
+    { code: "USD", name: "United States Dollars", symbol: "$", aliases: ["usd", "us dollar", "dollar", "american dollar", "us", "bucks", "greenback"] },
+    { code: "EUR", name: "Euros", symbol: "€", aliases: ["euro", "euros", "eur"] },
+    { code: "INR", name: "Indian Rupees", symbol: "₹", aliases: ["inr", "rupee", "indian rupee", "rs", "rupees"] },
+    { code: "GBP", name: "British Pounds", symbol: "£", aliases: ["gbp", "pound", "pound sterling", "british pound", "quid"] },
+    { code: "JPY", name: "Japanese Yen", symbol: "¥", aliases: ["jpy", "yen", "japanese yen"] },
+    { code: "AUD", name: "Australian Dollars", symbol: "$", aliases: ["aud", "australian dollar", "aussie dollar", "aussie", "aud dollar"] },
+    { code: "CAD", name: "Canadian Dollars", symbol: "$", aliases: ["cad", "canadian dollar", "cad dollar", "loonie"] },
+    { code: "CHF", name: "Swiss Francs", symbol: "CHF", aliases: ["chf", "swiss franc", "franc", "swissf", "sfr"] },
+    { code: "CNY", name: "Chinese Yuan", symbol: "¥", aliases: ["cny", "yuan", "chinese yuan", "renminbi", "rmb"] },
+    { code: "KRW", name: "South Korean Won", symbol: "₩", aliases: ["krw", "won", "south korean won"] },
+    { code: "MXN", name: "Mexican Pesos", symbol: "$", aliases: ["mxn", "peso", "mexican peso", "pesos"] },
+    { code: "HKD", name: "Hong Kong Dollars", symbol: "$", aliases: ["hkd", "hong kong dollar", "hk dollar"] },
+    { code: "SGD", name: "Singapore Dollars", symbol: "$", aliases: ["sgd", "singapore dollar", "sg dollar"] },
+    { code: "AED", name: "UAE Dirhams", symbol: "د.إ", aliases: ["aed", "dirham", "uae dirham", "dhs", "dh"] },
+    { code: "SAR", name: "Saudi Riyals", symbol: "﷼", aliases: ["sar", "saudi riyal", "riyals", "riyāl"] },
+    { code: "QAR", name: "Qatari Riyals", symbol: "﷼", aliases: ["qar", "qatari riyal", "riyals"] },
+    { code: "OMR", name: "Omani Rials", symbol: "﷼", aliases: ["omr", "omani rial", "rials"] }
+  ];
+
+
+
+  function normalize(str) {
+    return String(str)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s]/g, "");
+  }
+
+  function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+
+    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,
+          dp[i][j - 1] + 1,
+          dp[i - 1][j - 1] + cost
+        );
+      }
+    }
+    return dp[m][n];
+  }
+
+  const queryNorm = normalize(query);
+  let bestMatch = null;
+  let minDist = Infinity;
+
+  for (const cur of currencies) {
+    const candidates = [cur.code, cur.name, cur.symbol, ...(cur.aliases || [])];
+
+    for (const cand of candidates) {
+      const dist = levenshtein(queryNorm, normalize(cand));
+      if (dist < minDist) {
+        minDist = dist;
+        bestMatch = cur;
+      }
+    }
+  }
+
+  const threshold = Math.max(3, Math.floor(queryNorm.length * 0.4));
+
+  if (minDist <= threshold) {
+    return {
+      ok: true,
+      ...bestMatch,
+      distance: minDist,
+      confidence: Number((1 - minDist / queryNorm.length).toFixed(2)),
+      query
+    };
+  } else {
+    return { ok: false, query, tried: queryNorm };
+  }
 }
 
 // ========== Format Currency ==========
@@ -318,15 +418,11 @@ function formatCurrency(num, currencySymbol, isInternational) {
 }
 
 // ========== Generate Item Rows HTML ==========
-// ========== Generate Item Rows HTML ==========
 function generateItemRowsHtml(items, hasGST, hasHSN, currencySymbol, isInternational, companyState, clientState, baseAmount) {
   let html = '';
-  // Removed: let subtotal = 0;
   
   // Add each item as a row
   items.forEach(item => {
-    // Removed: subtotal += item.amount;
-    
     // Build narration HTML
     let narrationHtml = '';
     if (item.narrations && item.narrations.length > 0) {
@@ -350,12 +446,6 @@ function generateItemRowsHtml(items, hasGST, hasHSN, currencySymbol, isInternati
       html += '</tr>\n';
     }
   });
-  
-  // --- SUBOTAL BLOCK REMOVED ---
-  // if (items.length > 1) {
-  //   ... (subtotal logic was here) ...
-  // }
-  // --- END REMOVAL ---
   
   // Add GST rows if applicable
   if (hasGST && !isInternational) {
@@ -409,53 +499,34 @@ function generateItemRowsHtml(items, hasGST, hasHSN, currencySymbol, isInternati
 }
 
 // ========== Process Template Conditionals ==========
-/**
- * Processes conditional blocks in the HTML template using regex.
- * This is a translation of your Python `process_conditionals` logic.
- * It reads markers like <? if (CONDITION) { ?>...<? } ?>
- */
 function processTemplateMarkers(html, conditions) {
   let result = html;
 
   // === 1. Handle INTERNATIONAL_PARTY (if block) ===
-  // This handles the top notice and the LUT details in the footer
-  // Regex: <\?\s*if\s*\(\s*INTERNATIONAL_PARTY\s*\)\s*\{\s*\?>(.*?)<\?\s*\}\s*\?>
   const internationalRegex = /<\?\s*if\s*\(\s*INTERNATIONAL_PARTY\s*\)\s*\{\s*\?>(.*?)<\?\s*\}\s*\?>/gs;
   if (conditions.INTERNATIONAL_PARTY) {
-    // Keep the content ($1), remove the markers
     result = result.replace(internationalRegex, '$1');
   } else {
-    // Remove the entire block (markers + content)
     result = result.replace(internationalRegex, '');
   }
 
   // === 2. Handle !INTERNATIONAL_PARTY (if block for PAN/GST) ===
-  // This handles the domestic-only PAN and GST fields
-  // Regex: <\?\s*if\s*\(\s*!INTERNATIONAL_PARTY\s*\)\s*\{\s*\?>(.*?)<\?\s*\}\s*\?>
   const domesticBlockRegex = /<\?\s*if\s*\(\s*!INTERNATIONAL_PARTY\s*\)\s*\{\s*\?>(.*?)<\?\s*\}\s*\?>/gs;
   if (conditions.INTERNATIONAL_PARTY) {
-    // Is international, so REMOVE this domestic-only block
     result = result.replace(domesticBlockRegex, '');
   } else {
-    // Is domestic, so KEEP this block's content ($1)
     result = result.replace(domesticBlockRegex, '$1');
   }
   
   // === 3. Handle HAS_HSN (if-else block) ===
-  // This handles the table header (2 columns vs 3 columns)
-  // Regex: <\?\s*if\s*\(\s*HAS_HSN\s*\)\s*\{\s*\?>(.*?)<\?\s*\}\s*else\s*\{\s*\?>(.*?)<\?\s*\}\s*\?>
   const hsnRegex = /<\?\s*if\s*\(\s*HAS_HSN\s*\)\s*\{\s*\?>(.*?)<\?\s*\}\s*else\s*\{\s*\?>(.*?)<\?\s*\}\s*\?>/gs;
   if (conditions.HAS_HSN) {
-    // Keep IF branch content ($1)
     result = result.replace(hsnRegex, '$1');
   } else {
-    // Keep ELSE branch content ($2)
     result = result.replace(hsnRegex, '$2');
   }
 
   // === 4. Handle Total GST row (Manual Removal) ===
-  // This mimics your Python logic: the GST row is removed if
-  // it's an international client OR if GST is not being applied.
   if (!conditions.GST || conditions.INTERNATIONAL_PARTY) {
     const gstRowRegex = /<tr>\s*<th>\s*Total\s*GST\s*<\/th>\s*<td>\s*{{GST_DISPLAY}}\s*<\/td>\s*<\/tr>\s*/gis;
     result = result.replace(gstRowRegex, '');
@@ -464,6 +535,21 @@ function processTemplateMarkers(html, conditions) {
   return result;
 }
 
+// ========== Extract Starting Invoice Number from Template ==========
+function extractStartingInvoiceNumber(templateHtml) {
+  // Look for exact pattern: <div class="meta-line"><strong>Invoice No:</strong> YYYY/Inv/XXX</div>
+  const pattern = /<div class="meta-line"><strong>Invoice No:<\/strong>\s*(\d{4})\/Inv\/(\d{3})<\/div>/;
+  const match = templateHtml.match(pattern);
+  
+  if (match && match[1] && match[2]) {
+    return {
+      year: parseInt(match[1], 10),
+      number: parseInt(match[2], 10)
+    };
+  }
+  
+  return null;
+}
 
 // ========== Amount in Words with Currency ==========
 function numberToWordsWithCurrency(amount, currencyName, isInternational) {
@@ -585,42 +671,43 @@ function onSheetEdit(e) {
     let currencyName = 'Rupees';
     let partyState = clientStateRaw;
     let partyStateCode = STATE_CODES[clientStateRaw] || '';
+    let placeOfSupplyDisplay = placeOfSupply || clientStateRaw;
     
-    if (clientStateRaw.toLowerCase().startsWith('foreign')) {
+    if (clientStateRaw.toLowerCase().startsWith('outside')) {
       const intlData = parseInternationalClient(clientStateRaw);
       if (intlData) {
         isInternational = true;
         currencySymbol = intlData.currencySymbol;
         currencyName = intlData.currencyName;
-        partyState = intlData.partyState;
-        partyStateCode = intlData.stateCode;
+        partyState = intlData.partyState; // This will be "Outside India"
+        partyStateCode = intlData.stateCode; // This will be "96"
+        placeOfSupplyDisplay = "Outside India"; // Always just "Outside India" for display
       }
     } else {
       partyStateCode = STATE_CODES[clientStateRaw] || '';
+      placeOfSupplyDisplay = placeOfSupply || clientStateRaw;
     }
 
     // Determine if we should show GST
     const hasGST = isGSTEnabledTemplate && !isInternational;
     const hasHSN = hasGST && hsnCol;
 
-    // --- NEW CONDITIONAL LOGIC ---
     // Define the conditions based on our calculated variables
     const conditions = {
       INTERNATIONAL_PARTY: isInternational,
-      HAS_HSN: hasHSN, // True only for domestic GST with HSN col
-      GST: hasGST      // True only for domestic GST
+      HAS_HSN: hasHSN,
+      GST: hasGST
     };
     
     // Process the template markers BEFORE filling placeholders
     templateHtml = processTemplateMarkers(templateHtml, conditions);
-    // --- END NEW LOGIC ---
 
     // Parse multiple items with narrations
     const items = parseMultipleItems(descriptionRaw, costRaw, hsnRaw);
     console.log('Parsed ' + items.length + ' items');
 
     const invoiceDate = new Date();
-    const invoiceNumber = generateInvoiceNumber(sheet, editedRow, invoiceDate, statusCol, invoiceNumCol);
+    const invoiceNumber = generateInvoiceNumber(sheet, invoiceDate, statusCol, invoiceNumCol, templateHtml);
 
     // Calculate totals
     let baseAmount = 0;
@@ -654,9 +741,14 @@ function onSheetEdit(e) {
     // Amount in words
     const amountInWords = numberToWordsWithCurrency(totalAmount, currencyName, isInternational);
 
+    // Replace the hardcoded invoice number in template HTML with the generated one (for PDF only)
+    let pdfTemplateHtml = templateHtml.replace(
+      /<div class="meta-line"><strong>Invoice No:<\/strong>\s*\d{4}\/Inv\/\d{3}<\/div>/,
+      '<div class="meta-line"><strong>Invoice No:</strong> ' + invoiceNumber + '</div>'
+    );
+
     // Fill template with data
-    // We already processed the conditionals, so we pass `templateHtml` directly
-    const filledHtml = fillTemplate(templateHtml, {
+    const filledHtml = fillTemplate(pdfTemplateHtml, {
       INVOICE_NUMBER: invoiceNumber,
       DATE: formatDateHuman(invoiceDate),
       DUE_DATE: formatDateHuman(invoiceDate),
@@ -666,7 +758,7 @@ function onSheetEdit(e) {
       PARTY_GST: isInternational ? 'N/A' : (gst || 'N/A'),
       PARTY_STATE: partyState,
       PARTY_STATE_CODE: partyStateCode,
-      PLACE_OF_SUPPLY: placeOfSupply,
+      PLACE_OF_SUPPLY: placeOfSupplyDisplay,
       ITEM_ROWS: itemRowsHtml,
       TOTAL_BASE_DISPLAY: formatCurrency(baseAmount, currencySymbol, isInternational),
       GST_DISPLAY: formatCurrency(gstAmount, currencySymbol, false),
@@ -791,18 +883,25 @@ function numberToIndianWords(amount) {
   return result + ' Only';
 }
 
-function generateInvoiceNumber(sheet, currentRow, invoiceDate, statusCol, invoiceNumCol) {
-  const year = invoiceDate.getFullYear();
-  const month = String(invoiceDate.getMonth() + 1).padStart(2, '0');
-  const prefix = year + '/' + month + '/';
+function generateInvoiceNumber(sheet, invoiceDate, statusCol, invoiceNumCol, templateHtml) {
+  const currentYear = invoiceDate.getFullYear();
+  const prefix = currentYear + '/Inv/';
   
-  let maxIndex = 0;
+  // Extract invoice number from template
+  const templateData = extractStartingInvoiceNumber(templateHtml);
   
-  if (currentRow > 2) {
+  // Check all rows in sheet for generated invoices
+  const lastRow = sheet.getLastRow();
+  let maxInvoiceNumber = 0;
+  let hasGeneratedInvoices = false;
+  let isFirstInvoiceOfYear = false;
+  
+  if (lastRow >= 2) {
     const startCol = Math.min(statusCol, invoiceNumCol);
     const endCol = Math.max(statusCol, invoiceNumCol);
     const width = endCol - startCol + 1;
-    const rowCount = Math.max(0, currentRow - 2);
+    const rowCount = lastRow - 1;
+    
     if (rowCount > 0) {
       const dataRange = sheet.getRange(2, startCol, rowCount, width);
       const data = dataRange.getValues();
@@ -812,11 +911,29 @@ function generateInvoiceNumber(sheet, currentRow, invoiceDate, statusCol, invoic
         const existingInvoiceNum = String(data[i][invoiceNumCol - startCol] || '').trim();
         
         if (status === 'Generated' && existingInvoiceNum.startsWith(prefix)) {
+          hasGeneratedInvoices = true;
           const parts = existingInvoiceNum.split('/');
           if (parts.length === 3) {
             const index = parseInt(parts[2], 10);
-            if (!isNaN(index) && index > maxIndex) {
-              maxIndex = index;
+            if (!isNaN(index) && index > maxInvoiceNumber) {
+              maxInvoiceNumber = index;
+            }
+          }
+        }
+      }
+      
+      // Check if this is the first invoice of a new year
+      if (!hasGeneratedInvoices) {
+        // Check if there are any invoices from previous years
+        for (let i = 0; i < data.length; i++) {
+          const status = String(data[i][statusCol - startCol] || '').trim();
+          const existingInvoiceNum = String(data[i][invoiceNumCol - startCol] || '').trim();
+          
+          if (status === 'Generated' && existingInvoiceNum.match(/\d{4}\/Inv\/\d{3}/)) {
+            const yearMatch = existingInvoiceNum.match(/^(\d{4})\//);
+            if (yearMatch && parseInt(yearMatch[1], 10) < currentYear) {
+              isFirstInvoiceOfYear = true;
+              break;
             }
           }
         }
@@ -824,7 +941,33 @@ function generateInvoiceNumber(sheet, currentRow, invoiceDate, statusCol, invoic
     }
   }
   
-  const newIndex = String(maxIndex + 1).padStart(3, '0');
+  let nextNumber;
+  
+  // CASE 1: First invoice of a new year
+  if (isFirstInvoiceOfYear) {
+    nextNumber = 1;
+    console.log('First invoice of new year ' + currentYear + '. Starting from 001.');
+  }
+  // CASE 2: Table has generated invoices for current year
+  else if (hasGeneratedInvoices) {
+    nextNumber = maxInvoiceNumber + 1;
+    console.log('Continuing from sheet. Last invoice: ' + maxInvoiceNumber + ', Next: ' + nextNumber);
+  }
+  // CASE 3: No generated invoices in table
+  else {
+    // Check if template year matches current year
+    if (templateData && templateData.year === currentYear) {
+      // Same year: use template number + 1
+      nextNumber = templateData.number + 1;
+      console.log('No invoices in table. Using template number + 1: ' + nextNumber);
+    } else {
+      // Different year or no template data: start from 001
+      nextNumber = 1;
+      console.log('No invoices in table and year mismatch. Starting from 001.');
+    }
+  }
+  
+  const newIndex = String(nextNumber).padStart(3, '0');
   return prefix + newIndex;
 }
 
@@ -855,7 +998,7 @@ function htmlToPdfFile(htmlContent, outputName, folderId) {
       const folder = DriveApp.getFolderById(folderId);
       const savedPdf = folder.createFile(pdfBlob).setName(outputName + '.pdf');
 
-      try { DriveApp.getFileById(docId).setTrashed(true); } catch (e) {} // Clean up temp doc
+      try { DriveApp.getFileById(docId).setTrashed(true); } catch (e) {}
       return savedPdf;
     } else {
       throw new Error('Advanced Drive service not available.');
@@ -877,10 +1020,8 @@ function htmlToPdfFile(htmlContent, outputName, folderId) {
 function convertToMultiLineAddress(address) {
   if (!address || address.trim() === '') return '';
   address = address.trim();
-  // Simple replace of comma with comma + <br>
   return address.replace(/,\s*/g, ',<br>');
 }
-
 
 function escapeHtml(text) {
   if (text == null) return '';
